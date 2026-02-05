@@ -60,11 +60,14 @@ pub fn _debugcon_print(args: core::fmt::Arguments) {
     // this is unsafe because we are calling assembly code
     // in this case, writing to the debug console port (0xe9)
     // only a single byte at a time is written
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         for byte in s.bytes() {
             core::arch::asm!("out 0xe9, al", in("al") byte);
         }
     }
+
+    // TODO: aarch64 implementation
 }
 
 /// Print to the debug console

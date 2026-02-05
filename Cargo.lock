@@ -67,26 +67,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "ktest-macros"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eca314b414aa01deeb3e141ee70bf4b6a9172384feb64072c4365213697916f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "kunit"
 version = "0.1.0"
 dependencies = [
  "conquer-once",
  "heapless",
- "ktest-macros",
+ "kunit_macros",
  "spin",
  "uart_16550",
  "x86_64",
+]
+
+[[package]]
+name = "kunit_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

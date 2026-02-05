@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 conquer-once = { version = "0.4.0", default-features =  false }
 heapless = "0.9.1"
-ktest-macros = "0.1.2"
+kunit_macros = { path = "../kunit_macros" }
 spin = "0.10.0"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]

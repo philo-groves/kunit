@@ -3,7 +3,7 @@
 macro_rules! klib {
     // test group only
     ($test_group:literal) => {
-        $crate::klib!($test_group, klib_config = &ktest::KlibConfig::new_default());
+        $crate::klib!($test_group, klib_config = &kunit::KlibConfig::new_default());
     };
 
     // test group + klib config
@@ -20,16 +20,16 @@ macro_rules! klib {
             #[unsafe(link_section = ".requests_end_marker")]
             static ___END_MARKER: limine::request::RequestsEndMarker = limine::request::RequestsEndMarker::new();
 
-            static ___KLIB_CONFIG: ktest::KlibConfig = $klib_config;
+            static ___KLIB_CONFIG: kunit::KlibConfig = $klib_config;
 
             #[panic_handler]
             fn ___panic(info: &core::panic::PanicInfo) -> ! {
-                ktest::panic(info)
+                kunit::panic(info)
             }
 
             #[unsafe(no_mangle)]
             pub extern "C" fn _start() -> ! {
-                ktest::init_harness($test_group);
+                kunit::init_harness($test_group);
 
                 if let Some(before_tests) = ___KLIB_CONFIG.before_tests {
                     before_tests();

@@ -6,15 +6,15 @@
 #![cfg_attr(test, reexport_test_harness_main = "test_harness")]
 
 #[cfg(test)]
-extern crate self as ktest;
+extern crate self as kunit;
 
 mod args;
-mod macros;
+pub mod macros;
 mod print;
-mod test;
+pub mod test;
 mod qemu;
 
-pub use ktest_macros::ktest;
+pub use kunit_macros::kunit;
 pub use macros::klib::{KlibConfig, KlibConfigBuilder};
 pub use test::{runner::runner, Test, split_module_path, split_module_path_len};
 
