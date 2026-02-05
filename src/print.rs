@@ -1,15 +1,16 @@
 use conquer_once::spin::OnceCell;
 use heapless::String;
 use spin::Mutex;
-use uart_16550::SerialPort;
 use crate::MAX_STRING_LENGTH;
 
 /// The global serial port instance
-pub static SERIAL1: OnceCell<Mutex<SerialPort>> = OnceCell::uninit();
+#[cfg(target_arch = "x86_64")]
+pub static SERIAL1: OnceCell<Mutex<uart_16550::SerialPort>> = OnceCell::uninit();
 
 /// Initialize the global serial port
-fn init_serial() -> Mutex<SerialPort> {
-    let mut serial_port = unsafe { SerialPort::new(0x3F8) };
+#[cfg(target_arch = "x86_64")]
+fn init_serial() -> Mutex<uart_16550::SerialPort> {
+    let mut serial_port = unsafe { uart_16550::SerialPort::new(0x3F8) };
     serial_port.init();
     Mutex::new(serial_port)
 }
