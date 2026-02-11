@@ -58,7 +58,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
     use crate::test::runner::TEST_RUNNER;
 
     if let Some(runner) = TEST_RUNNER.get() {
-        return runner.handle_panic(info);
+        runner.handle_panic(info);
     }
 
     use heapless::{format, String};
