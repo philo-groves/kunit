@@ -10,7 +10,7 @@ repository = "https://github.com/philogroves/kunit"
 [dependencies]
 conquer-once = { version = "0.4.0", default-features =  false }
 heapless = "0.9.1"
-kunit_macros = { path = "../kunit_macros" }
+kunit_macros = { path = "../kunit_macros", version = "0.1.0" }
 spin = "0.10.0"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
