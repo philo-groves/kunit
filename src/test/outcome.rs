@@ -39,7 +39,7 @@ where
 pub enum TestResult {
     Success,
     Failure,
-    Ignore
+    Ignore,
 }
 
 impl TestResult {

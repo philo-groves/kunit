@@ -1,6 +1,6 @@
+use crate::MAX_STRING_LENGTH;
 use conquer_once::spin::OnceCell;
 use heapless::String;
-use crate::MAX_STRING_LENGTH;
 
 /// A global variable to hold the test group name (only one test group per binary)
 static TEST_GROUP: OnceCell<String<MAX_STRING_LENGTH>> = OnceCell::uninit();

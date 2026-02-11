@@ -1,10 +1,13 @@
-use heapless::{format, String};
 use crate::{debugcon_println, MAX_STRING_LENGTH};
+use heapless::{format, String};
 
 /// Writes a JSON object indicating the start of a test group with its name and test count.
 pub fn write_test_group(test_group: &str, test_count: usize) {
-    let test_group_json: String<MAX_STRING_LENGTH> = format!(r#"{{ "test_group": "{}", "test_count": {} }}"#, 
-        test_group, test_count).unwrap();
+    let test_group_json: String<MAX_STRING_LENGTH> = format!(
+        r#"{{ "test_group": "{}", "test_count": {} }}"#,
+        test_group, test_count
+    )
+    .unwrap();
     let test_group_json = replace_heapless_string(&test_group_json, "\n", "").unwrap();
     let test_group_json = replace_heapless_string(&test_group_json, "\t", "").unwrap();
 
@@ -13,12 +16,16 @@ pub fn write_test_group(test_group: &str, test_count: usize) {
 
 /// Writes a JSON object indicating the success of a test case, including its name and cycle count.
 pub fn write_test_success(test_name: &str, cycle_count: u64) {
-    let test_json: String<MAX_STRING_LENGTH> = format!(r#"
+    let test_json: String<MAX_STRING_LENGTH> = format!(
+        r#"
 {{
     "test": "{}",
     "result": "pass",
     "cycle_count": {}
-}}"#, test_name, cycle_count).unwrap();
+}}"#,
+        test_name, cycle_count
+    )
+    .unwrap();
     let test_json = replace_heapless_string(&test_json, "\n", "").unwrap();
     let test_json = replace_heapless_string(&test_json, "   ", "").unwrap();
 
@@ -27,12 +34,16 @@ pub fn write_test_success(test_name: &str, cycle_count: u64) {
 
 /// Writes a JSON object indicating the ignore of a test case, including its name and cycle count.
 pub fn write_test_ignore(test_name: &str) {
-    let test_json: String<MAX_STRING_LENGTH> = format!(r#"
+    let test_json: String<MAX_STRING_LENGTH> = format!(
+        r#"
 {{
     "test": "{}",
     "result": "ignore",
     "cycle_count": 0
-}}"#, test_name).unwrap();
+}}"#,
+        test_name
+    )
+    .unwrap();
     let test_json = replace_heapless_string(&test_json, "\n", "").unwrap();
     let test_json = replace_heapless_string(&test_json, "   ", "").unwrap();
 
@@ -41,16 +52,25 @@ pub fn write_test_ignore(test_name: &str) {
 
 /// Writes a JSON object indicating the failure of a test case, including its name, location, and failure message.
 pub fn write_test_failure(test_name: &str, location: &str, message: &str) {
-    let location = replace_heapless_string(&String::<MAX_STRING_LENGTH>::try_from(location).unwrap(), "\\", "/").unwrap(); // prevents escape issues with heapless String
+    let location = replace_heapless_string(
+        &String::<MAX_STRING_LENGTH>::try_from(location).unwrap(),
+        "\\",
+        "/",
+    )
+    .unwrap(); // prevents escape issues with heapless String
 
-    let test_json: String<MAX_STRING_LENGTH> = format!(r#"
+    let test_json: String<MAX_STRING_LENGTH> = format!(
+        r#"
 {{
     "test": "{}",
     "result": "fail",
     "cycle_count": 0,
     "location": "{}",
     "message": "{}"
-}}"#, test_name, location, message).unwrap();
+}}"#,
+        test_name, location, message
+    )
+    .unwrap();
     let test_json = replace_heapless_string(&test_json, "\n", "").unwrap();
     let test_json = replace_heapless_string(&test_json, "   ", "").unwrap();
 

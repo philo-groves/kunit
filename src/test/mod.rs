@@ -1,9 +1,9 @@
-use core::mem::MaybeUninit;
 use crate::test::outcome::Termination;
+use core::mem::MaybeUninit;
 
+pub mod outcome;
 pub mod output;
 pub mod runner;
-pub mod outcome;
 
 /// A standard test.
 ///
@@ -70,7 +70,7 @@ where
     fn run(&self) {
         (self.test)().terminate();
     }
-    
+
     fn qualified_name(&self) -> &'static str {
         self.name
     }
@@ -97,7 +97,7 @@ pub enum Ignore {
     /// The test should be run.
     No,
     /// The test should not be run.
-    Yes
+    Yes,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -105,7 +105,7 @@ pub enum ShouldPanic {
     /// The test is expected to run successfully.
     No,
     /// The test is expected to panic during execution.
-    Yes
+    Yes,
 }
 
 #[doc(hidden)]

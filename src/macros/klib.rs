@@ -14,11 +14,13 @@ macro_rules! klib {
 
             #[used]
             #[unsafe(link_section = ".requests_start_marker")]
-            static ___START_MARKER: limine::request::RequestsStartMarker = limine::request::RequestsStartMarker::new();
+            static ___START_MARKER: limine::request::RequestsStartMarker =
+                limine::request::RequestsStartMarker::new();
 
             #[used]
             #[unsafe(link_section = ".requests_end_marker")]
-            static ___END_MARKER: limine::request::RequestsEndMarker = limine::request::RequestsEndMarker::new();
+            static ___END_MARKER: limine::request::RequestsEndMarker =
+                limine::request::RequestsEndMarker::new();
 
             static ___KLIB_CONFIG: kunit::KlibConfig = $klib_config;
 
@@ -42,17 +44,21 @@ macro_rules! klib {
                 }
 
                 loop {
-                    // It may seem preferable to use the `x86_64` crate's `hlt` instruction here, 
+                    // It may seem preferable to use the `x86_64` crate's `hlt` instruction here,
                     // but that would require any crates using this macro to depend on `x86_64`,
                     // which is not desirable. Using inline assembly avoids that dependency.
                     //
                     // note: this is the exact same instruction as `x86_64::instructions::hlt()`
                     #[cfg(target_arch = "x86_64")]
-                    unsafe { core::arch::asm!("hlt", options(nomem, nostack, preserves_flags)); }
+                    unsafe {
+                        core::arch::asm!("hlt", options(nomem, nostack, preserves_flags));
+                    }
 
                     // hlt is not available on aarch64, so we use wfi instead
                     #[cfg(target_arch = "aarch64")]
-                    unsafe { core::arch::asm!("wfi", options(nomem, nostack, preserves_flags)); }
+                    unsafe {
+                        core::arch::asm!("wfi", options(nomem, nostack, preserves_flags));
+                    }
                 }
             }
         };
@@ -61,42 +67,42 @@ macro_rules! klib {
 
 pub struct KlibConfig {
     pub before_tests: Option<fn()>,
-    pub after_tests: Option<fn()>
+    pub after_tests: Option<fn()>,
 }
 
 impl KlibConfig {
     pub const fn new_default() -> Self {
         KlibConfig {
             before_tests: None,
-            after_tests: None
+            after_tests: None,
         }
     }
 }
 
 pub struct KlibConfigBuilder {
     pub before_tests: Option<fn()>,
-    pub after_tests: Option<fn()>
+    pub after_tests: Option<fn()>,
 }
 
 impl KlibConfigBuilder {
     pub const fn new_default() -> Self {
         KlibConfigBuilder {
             before_tests: None,
-            after_tests: None
+            after_tests: None,
         }
     }
 
     pub const fn new(before_tests: Option<fn()>, after_tests: Option<fn()>) -> Self {
         KlibConfigBuilder {
             before_tests,
-            after_tests
+            after_tests,
         }
     }
 
     pub const fn build(self) -> KlibConfig {
         KlibConfig {
             before_tests: self.before_tests,
-            after_tests: self.after_tests
+            after_tests: self.after_tests,
         }
     }
 

@@ -1,10 +1,14 @@
+use crate::{
+    args, qemu, serial_print, serial_println,
+    test::{self, outcome::TestResult, Ignore, ShouldPanic, TestCase},
+    MAX_STRING_LENGTH,
+};
 use conquer_once::spin::OnceCell;
 use heapless::{format, String};
 use spin::RwLock;
-use crate::{MAX_STRING_LENGTH, args, qemu, serial_print, serial_println, test::{self, Ignore, ShouldPanic, TestCase, outcome::TestResult}};
 
-/// A static reference to the list of test functions to run. This is unsafe but only set 
-/// once at the start of runner. The static nature of the tests makes it impossible to use 
+/// A static reference to the list of test functions to run. This is unsafe but only set
+/// once at the start of runner. The static nature of the tests makes it impossible to use
 /// OnceCell, Mutex, or RwLock here (at least their no_std variants).
 static mut TESTS: &'static [&'static dyn TestCase] = &[];
 
@@ -18,11 +22,13 @@ pub static CURRENT_TEST_INDEX: OnceCell<RwLock<usize>> = OnceCell::new(RwLock::n
 pub static CURRENT_MODULE: OnceCell<RwLock<&'static str>> = OnceCell::new(RwLock::new(""));
 
 /// A test runner that runs the given tests and exits QEMU after completion.
-/// 
-/// Output from this runner is formatted as line-delimited JSON and printed to the debug 
+///
+/// Output from this runner is formatted as line-delimited JSON and printed to the debug
 /// console. This allows for easy parsing of test results by external tools, such as `kboot`.
 pub fn runner(tests: &'static [&'static dyn TestCase]) -> ! {
-    unsafe { TESTS = tests; }
+    unsafe {
+        TESTS = tests;
+    }
 
     TEST_RUNNER.get_or_init(|| KernelTestRunner::default());
     TEST_RUNNER.get().unwrap().run_tests(0)
@@ -60,10 +66,11 @@ impl TestRunner for KernelTestRunner {
     }
 
     fn run_tests(&self, start_index: usize) -> ! {
-        if start_index == 0 { // dont run before_tests if resuming
+        if start_index == 0 {
+            // dont run before_tests if resuming
             self.before_tests();
         }
-        
+
         let tests = unsafe { TESTS };
         for (i, &test) in tests.iter().enumerate().skip(start_index) {
             let cycle_start = self.start_test();
@@ -92,7 +99,7 @@ impl TestRunner for KernelTestRunner {
     fn start_test(&self) -> u64 {
         // check if the current module has changed; if so, reassign it and print a header
         let current_test = self.current_test().unwrap();
-        
+
         let module_path = current_test.modules().unwrap_or("unknown_module");
         {
             let mut current_module = CURRENT_MODULE.get().unwrap().write();
@@ -101,8 +108,15 @@ impl TestRunner for KernelTestRunner {
 
                 let module_test_count = count_by_module(module_path);
                 let test_group = args::get_test_group().unwrap_or("default");
-                serial_println!("\n################################################################");
-                serial_println!("# Running {} {} tests for module: {}", module_test_count, test_group, module_path);
+                serial_println!(
+                    "\n################################################################"
+                );
+                serial_println!(
+                    "# Running {} {} tests for module: {}",
+                    module_test_count,
+                    test_group,
+                    module_path
+                );
                 serial_println!("----------------------------------------------------------------");
             }
         } // scope will release the lock here
@@ -115,7 +129,8 @@ impl TestRunner for KernelTestRunner {
     }
 
     fn complete_test(&self, result: TestResult, cycle_start: u64) {
-        let cycle_count = if cycle_start != u64::MAX { // u64::MAX = unknown
+        let cycle_count = if cycle_start != u64::MAX {
+            // u64::MAX = unknown
             read_current_cycle() - cycle_start
         } else {
             0
@@ -124,7 +139,12 @@ impl TestRunner for KernelTestRunner {
         match result {
             TestResult::Success => {
                 let current_test = self.current_test().unwrap();
-                let test_name: String<MAX_STRING_LENGTH> = format!("{}::{}", current_test.modules().unwrap(), current_test.name()).unwrap();
+                let test_name: String<MAX_STRING_LENGTH> = format!(
+                    "{}::{}",
+                    current_test.modules().unwrap(),
+                    current_test.name()
+                )
+                .unwrap();
                 test::output::write_test_success(&test_name, cycle_count);
                 serial_println!("[pass]");
             }
@@ -133,7 +153,12 @@ impl TestRunner for KernelTestRunner {
             }
             TestResult::Ignore => {
                 let current_test = self.current_test().unwrap();
-                let test_name: String<MAX_STRING_LENGTH> = format!("{}::{}", current_test.modules().unwrap(), current_test.name()).unwrap();
+                let test_name: String<MAX_STRING_LENGTH> = format!(
+                    "{}::{}",
+                    current_test.modules().unwrap(),
+                    current_test.name()
+                )
+                .unwrap();
                 test::output::write_test_ignore(&test_name);
                 serial_println!("[ignore]");
             }
@@ -156,7 +181,12 @@ impl TestRunner for KernelTestRunner {
         let message = info.message().as_str().unwrap_or("no message");
 
         let current_test = self.current_test().unwrap();
-        let test_name: String<MAX_STRING_LENGTH> = format!("{}::{}", current_test.modules().unwrap(), current_test.name()).unwrap();
+        let test_name: String<MAX_STRING_LENGTH> = format!(
+            "{}::{}",
+            current_test.modules().unwrap(),
+            current_test.name()
+        )
+        .unwrap();
 
         // handle according to whether the test was expected to panic
         match current_test.should_panic() {
@@ -183,18 +213,18 @@ impl TestRunner for KernelTestRunner {
 
 /// Helper function to read the current CPU cycle count using the RDTSC instruction.
 fn read_current_cycle() -> u64 {
-    unsafe { core::arch::x86_64::_rdtsc() }
+    crate::arch::read_cycle()
 }
 
 /// Helper function to assign base + 1 to CURRENT_TEST_INDEX.
 fn increment_test_index(base: usize) -> bool {
     let mut current_test_index = CURRENT_TEST_INDEX.get().unwrap().write();
-    
+
     let tests = unsafe { TESTS };
     if *current_test_index >= tests.len() {
         return false; // no more tests to run
     }
-    
+
     *current_test_index = base + 1;
     true
 }
@@ -202,7 +232,8 @@ fn increment_test_index(base: usize) -> bool {
 /// Helper function to count the number of tests in a given module.
 fn count_by_module(module_name: &str) -> usize {
     let tests = unsafe { TESTS };
-    tests.iter()
+    tests
+        .iter()
         .filter(|&&test| test.modules().unwrap_or("") == module_name)
         .count()
 }

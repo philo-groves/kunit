@@ -1,7 +1,7 @@
+use crate::MAX_STRING_LENGTH;
 use conquer_once::spin::OnceCell;
 use heapless::String;
 use spin::Mutex;
-use crate::MAX_STRING_LENGTH;
 
 /// The global serial port instance
 #[cfg(target_arch = "x86_64")]
@@ -25,7 +25,8 @@ pub fn _serial_print(args: core::fmt::Arguments) {
 
         interrupts::without_interrupts(|| {
             let serial = SERIAL1.get_or_init(|| init_serial());
-            serial.lock()
+            serial
+                .lock()
                 .write_fmt(args)
                 .expect("Printing to serial failed");
         });
@@ -57,17 +58,7 @@ pub fn _debugcon_print(args: core::fmt::Arguments) {
     let mut s = String::<MAX_STRING_LENGTH>::new();
     s.write_fmt(args).expect("Failed to write to string");
 
-    // this is unsafe because we are calling assembly code
-    // in this case, writing to the debug console port (0xe9)
-    // only a single byte at a time is written
-    #[cfg(target_arch = "x86_64")]
-    unsafe {
-        for byte in s.bytes() {
-            core::arch::asm!("out 0xe9, al", in("al") byte);
-        }
-    }
-
-    // TODO: aarch64 implementation
+    crate::arch::debug_write(s.as_bytes());
 }
 
 /// Print to the debug console

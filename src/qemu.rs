@@ -1,18 +1,6 @@
 /// Exit QEMU with the given exit code. This function will not return.
 pub fn exit(exit_code: ExitCode) -> ! {
-    #[cfg(target_arch = "x86_64")]
-    {
-        use x86_64::instructions::{nop, port::Port};
-
-        unsafe {
-            let mut port = Port::new(0xf4);
-            port.write(exit_code as u32);
-        }
-
-        loop {
-            nop();
-        }
-    }
+    crate::arch::exit(exit_code as u32)
 }
 
 /// Exit codes for QEMU. These codes are written to the I/O port `0xf4`
@@ -21,5 +9,5 @@ pub fn exit(exit_code: ExitCode) -> ! {
 #[repr(u32)]
 pub enum ExitCode {
     Success = 0x10,
-    _Failed = 0x11
+    _Failed = 0x11,
 }
