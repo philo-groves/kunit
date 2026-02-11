@@ -1,0 +1,219 @@
+name: Kernel Tests
+
+on:
+  workflow_call:
+    inputs:
+      rust-toolchain:
+        description: Rust toolchain channel to install
+        required: false
+        type: string
+        default: nightly
+      targets:
+        description: Newline/comma-separated target JSON paths
+        required: false
+        type: string
+        default: linker/x86_64-grovean.json
+      kboot-features:
+        description: Optional cargo feature set for kernel crates
+        required: false
+        type: string
+        default: ""
+      cargo-test-args:
+        description: Optional extra cargo test arguments
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build-matrix:
+    name: Resolve test targets
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - id: targets
+        name: Build matrix from inputs
+        env:
+          TARGETS_INPUT: ${{ inputs.targets }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+
+          raw = os.environ.get("TARGETS_INPUT", "")
+          pieces = []
+          for line in raw.splitlines():
+              for candidate in line.split(","):
+                  value = candidate.strip()
+                  if value:
+                      pieces.append(value)
+
+          if not pieces:
+              raise SystemExit("No valid targets were provided in inputs.targets")
+
+          matrix = []
+          for target in pieces:
+              slug = re.sub(r"[^A-Za-z0-9._-]", "-", target).strip("-")
+              if not slug:
+                  slug = "target"
+              matrix.append({"target": target, "slug": slug})
+
+          output_path = os.environ["GITHUB_OUTPUT"]
+          with open(output_path, "a", encoding="utf-8") as fh:
+              fh.write(f"targets={json.dumps(matrix)}\n")
+          PY
+
+  test:
+    name: Test ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    needs: build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.build-matrix.outputs.targets) }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.rust-toolchain }}
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            mtools \
+            nasm \
+            ovmf \
+            qemu-efi-aarch64 \
+            qemu-system-arm \
+            qemu-system-x86 \
+            qemu-utils \
+            xorriso
+
+      - name: Run kernel tests
+        env:
+          TARGET: ${{ matrix.target }}
+          KBOOT_FEATURES: ${{ inputs.kboot-features }}
+          EXTRA_CARGO_TEST_ARGS: ${{ inputs.cargo-test-args }}
+        run: |
+          set -euo pipefail
+          command=(cargo test --target "$TARGET")
+          if [ -n "$KBOOT_FEATURES" ]; then
+            command+=(--features "$KBOOT_FEATURES")
+          fi
+          if [ -n "$EXTRA_CARGO_TEST_ARGS" ]; then
+            read -r -a extra_args <<< "$EXTRA_CARGO_TEST_ARGS"
+            command+=("${extra_args[@]}")
+          fi
+          echo "Running: ${command[*]}"
+          "${command[@]}"
+
+      - name: Validate test result files
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          testing_dir = Path(".k1/testing")
+          if not testing_dir.is_dir():
+              print("::error::.k1/testing was not created")
+              sys.exit(1)
+
+          files = sorted(testing_dir.glob("testing-*.jsonl"))
+          if not files:
+              print("::error::No testing-*.jsonl files were produced")
+              sys.exit(1)
+
+          metadata_raw = subprocess.check_output(
+              ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+              text=True,
+          )
+          metadata = json.loads(metadata_raw)
+          workspace_members = set(metadata.get("workspace_members", []))
+          packages = metadata.get("packages", [])
+          expected_groups = {
+              package["name"]
+              for package in packages
+              if package.get("id") in workspace_members
+          }
+
+          seen_groups = set()
+          failures = []
+
+          for path in files:
+              raw_lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+              if not raw_lines:
+                  failures.append(f"{path}: file is empty")
+                  continue
+
+              try:
+                  group_header = json.loads(raw_lines[0])
+              except json.JSONDecodeError as exc:
+                  failures.append(f"{path}: invalid JSON header ({exc})")
+                  continue
+
+              group = group_header.get("test_group")
+              expected_count = group_header.get("test_count")
+              if not isinstance(group, str) or not group:
+                  failures.append(f"{path}: missing or invalid test_group")
+                  continue
+              if not isinstance(expected_count, int) or expected_count < 0:
+                  failures.append(f"{path}: missing or invalid test_count")
+                  continue
+
+              file_group = path.stem.removeprefix("testing-")
+              if file_group != group:
+                  failures.append(f"{path}: file group '{file_group}' does not match JSON group '{group}'")
+
+              seen_groups.add(group)
+
+              test_rows = raw_lines[1:]
+              if len(test_rows) != expected_count:
+                  failures.append(
+                      f"{path}: test_count is {expected_count} but file contains {len(test_rows)} test rows"
+                  )
+
+              for index, line in enumerate(test_rows, start=2):
+                  try:
+                      row = json.loads(line)
+                  except json.JSONDecodeError as exc:
+                      failures.append(f"{path}: line {index} is invalid JSON ({exc})")
+                      continue
+
+                  result = row.get("result")
+                  test_name = row.get("test", "<unknown>")
+                  if result != "pass":
+                      failures.append(f"{path}: test '{test_name}' has result '{result}'")
+
+          missing = sorted(expected_groups - seen_groups)
+          extras = sorted(seen_groups - expected_groups)
+          if missing:
+              failures.append("Missing result files for workspace crates: " + ", ".join(missing))
+          if extras:
+              failures.append("Result files found for non-workspace crates: " + ", ".join(extras))
+
+          if failures:
+              for failure in failures:
+                  print(f"::error::{failure}")
+              sys.exit(1)
+
+          print("Validated test results:")
+          for group in sorted(seen_groups):
+              print(f"- {group}")
+          PY
+
+      - name: Upload test result files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testing-results-${{ matrix.slug }}
+          path: .k1/testing/testing-*.jsonl
+          if-no-files-found: warn
