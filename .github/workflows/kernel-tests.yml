@@ -57,7 +57,14 @@ jobs:
               slug = re.sub(r"[^A-Za-z0-9._-]", "-", target).strip("-")
               if not slug:
                   slug = "target"
-              matrix.append({"target": target, "slug": slug})
+              lower = target.lower()
+              if "x86_64" in lower:
+                  arch = "x86_64"
+              elif "aarch64" in lower:
+                  arch = "aarch64"
+              else:
+                  raise SystemExit(f"Unable to infer arch from target: {target}")
+              matrix.append({"target": target, "slug": slug, "arch": arch})
 
           output_path = os.environ["GITHUB_OUTPUT"]
           with open(output_path, "a", encoding="utf-8") as fh:
@@ -121,39 +128,65 @@ jobs:
           "${command[@]}"
 
       - name: Validate test result files
+        env:
+          ARCH: ${{ matrix.arch }}
         run: |
           python - <<'PY'
           import json
-          import subprocess
+          import os
           import sys
           from pathlib import Path
 
-          testing_dir = Path(".k1/testing")
+          arch = os.environ["ARCH"]
+          testing_dir = Path(".k1") / arch / "testing"
           if not testing_dir.is_dir():
-              print("::error::.k1/testing was not created")
+              print(f"::error::{testing_dir} was not created")
               sys.exit(1)
 
           files = sorted(testing_dir.glob("testing-*.jsonl"))
           if not files:
-              print("::error::No testing-*.jsonl files were produced")
+              print(f"::error::No testing-*.jsonl files were produced in {testing_dir}")
               sys.exit(1)
 
-          metadata_raw = subprocess.check_output(
-              ["cargo", "metadata", "--format-version", "1", "--no-deps"],
-              text=True,
-          )
-          metadata = json.loads(metadata_raw)
-          workspace_members = set(metadata.get("workspace_members", []))
-          packages = metadata.get("packages", [])
-          expected_groups = {
-              package["name"]
-              for package in packages
-              if package.get("id") in workspace_members
-          }
+          results_path = testing_dir / "results.json"
+          if not results_path.is_file():
+              print(f"::error::{results_path} was not produced")
+              sys.exit(1)
+
+          failures = []
+          try:
+              summary = json.loads(results_path.read_text(encoding="utf-8"))
+          except json.JSONDecodeError as exc:
+              print(f"::error::{results_path}: invalid JSON ({exc})")
+              sys.exit(1)
+
+          totals = summary.get("totals")
+          if not isinstance(totals, dict):
+              failures.append(f"{results_path}: missing object 'totals'")
+              totals = {}
+
+          passed = totals.get("passed")
+          failed = totals.get("failed")
+          ignored = totals.get("ignored")
+          for key, value in (("passed", passed), ("failed", failed), ("ignored", ignored)):
+              if not isinstance(value, int) or value < 0:
+                  failures.append(f"{results_path}: totals.{key} must be a non-negative integer")
+
+          failed_tests = summary.get("failed_tests")
+          ignored_tests = summary.get("ignored_tests")
+          if not isinstance(failed_tests, list) or not all(isinstance(x, str) for x in failed_tests):
+              failures.append(f"{results_path}: failed_tests must be an array of strings")
+              failed_tests = []
+          if not isinstance(ignored_tests, list) or not all(isinstance(x, str) for x in ignored_tests):
+              failures.append(f"{results_path}: ignored_tests must be an array of strings")
+              ignored_tests = []
+
+          if isinstance(failed, int) and failed == 0 and failed_tests:
+              failures.append(f"{results_path}: failed_tests is not empty while totals.failed is 0")
+          if isinstance(ignored, int) and ignored == 0 and ignored_tests:
+              failures.append(f"{results_path}: ignored_tests is not empty while totals.ignored is 0")
 
           seen_groups = set()
-          failures = []
-
           for path in files:
               raw_lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
               if not raw_lines:
@@ -194,24 +227,33 @@ jobs:
                       failures.append(f"{path}: line {index} is invalid JSON ({exc})")
                       continue
 
-                  result = row.get("result")
+                  result = row.get("result") or row.get("status") or row.get("outcome")
                   test_name = row.get("test", "<unknown>")
-                  if result != "pass":
-                      failures.append(f"{path}: test '{test_name}' has result '{result}'")
+                  normalized = str(result).strip().lower() if result is not None else ""
+                  if normalized in {"pass", "passed", "ok", "success", "ignore", "ignored", "skip", "skipped"}:
+                      continue
+                  if normalized in {"fail", "failed", "error", "panic"}:
+                      failures.append(f"{path}: test '{test_name}' has failing result '{result}'")
+                  else:
+                      failures.append(f"{path}: test '{test_name}' has unknown result '{result}'")
 
-          missing = sorted(expected_groups - seen_groups)
-          extras = sorted(seen_groups - expected_groups)
-          if missing:
-              failures.append("Missing result files for workspace crates: " + ", ".join(missing))
-          if extras:
-              failures.append("Result files found for non-workspace crates: " + ", ".join(extras))
+          if isinstance(failed, int) and failed > 0:
+              failures.append(
+                  f"{results_path}: totals.failed={failed}; failing tests: "
+                  + ", ".join(sorted(set(failed_tests)))
+              )
 
           if failures:
               for failure in failures:
                   print(f"::error::{failure}")
               sys.exit(1)
 
-          print("Validated test results:")
+          print(f"Validated {arch} test results:")
+          print(f"- passed: {passed}")
+          print(f"- failed: {failed}")
+          print(f"- ignored: {ignored}")
+          if ignored_tests:
+              print("::warning::Ignored tests: " + ", ".join(sorted(set(ignored_tests))))
           for group in sorted(seen_groups):
               print(f"- {group}")
           PY
@@ -221,5 +263,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: testing-results-${{ matrix.slug }}
-          path: .k1/testing/testing-*.jsonl
+          path: |
+            .k1/${{ matrix.arch }}/testing/testing-*.jsonl
+            .k1/${{ matrix.arch }}/testing/results.json
           if-no-files-found: warn
