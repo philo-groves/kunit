@@ -1,14 +1,18 @@
 use crate::MAX_STRING_LENGTH;
+#[cfg(target_arch = "x86_64")]
 use conquer_once::spin::OnceCell;
 use heapless::String;
+#[cfg(target_arch = "x86_64")]
 use spin::Mutex;
 
 /// The global serial port instance
 #[cfg(target_arch = "x86_64")]
+#[allow(dead_code)]
 pub static SERIAL1: OnceCell<Mutex<uart_16550::SerialPort>> = OnceCell::uninit();
 
 /// Initialize the global serial port
 #[cfg(target_arch = "x86_64")]
+#[allow(dead_code)]
 fn init_serial() -> Mutex<uart_16550::SerialPort> {
     let mut serial_port = unsafe { uart_16550::SerialPort::new(0x3F8) };
     serial_port.init();
@@ -30,6 +34,11 @@ pub fn _serial_print(args: core::fmt::Arguments) {
                 .write_fmt(args)
                 .expect("Printing to serial failed");
         });
+    }
+
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let _ = args;
     }
 }
 
