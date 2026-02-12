@@ -1,5 +1,9 @@
 use x86_64::instructions::{nop, port::Port};
 
+pub fn disable_interrupts() {
+    x86_64::instructions::interrupts::disable();
+}
+
 pub fn exit(exit_code: u32) -> ! {
     unsafe {
         let mut port = Port::new(0xf4);

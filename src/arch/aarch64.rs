@@ -5,6 +5,15 @@ const PL011_DR: usize = PL011_BASE + 0x00;
 const PL011_FR: usize = PL011_BASE + 0x18;
 const PL011_FR_TXFF: u32 = 1 << 5;
 
+pub fn disable_interrupts() {
+    unsafe {
+        core::arch::asm!(
+            "msr daifset, #0xf",
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+}
+
 pub fn exit(exit_code: u32) -> ! {
     let _ = exit_code;
 

@@ -37,6 +37,11 @@ pub fn init_harness(test_group: &str) {
     args::set_test_group(test_group);
 }
 
+/// Disable CPU interrupts for deterministic test execution.
+pub fn disable_interrupts() {
+    arch::disable_interrupts();
+}
+
 /// A panic handler that delegates to the test runner's panic handler. This should be
 /// included in libraries which use `kunit` to allow recovery from panics during tests.
 ///

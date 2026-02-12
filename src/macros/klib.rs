@@ -30,7 +30,9 @@ macro_rules! klib {
             }
 
             #[unsafe(no_mangle)]
+            #[unsafe(link_section = ".text._start")]
             pub extern "C" fn _start() -> ! {
+                kunit::disable_interrupts();
                 kunit::init_harness($test_group);
 
                 if let Some(before_tests) = ___KLIB_CONFIG.before_tests {

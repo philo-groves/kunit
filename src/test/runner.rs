@@ -1,5 +1,5 @@
 use crate::{
-    args, qemu, serial_print, serial_println,
+    args, qemu,
     test::{self, outcome::TestResult, Ignore, ShouldPanic, TestCase},
     MAX_STRING_LENGTH,
 };
@@ -105,24 +105,8 @@ impl TestRunner for KernelTestRunner {
             let mut current_module = CURRENT_MODULE.get().unwrap().write();
             if *current_module != module_path {
                 *current_module = module_path;
-
-                let module_test_count = count_by_module(module_path);
-                let test_group = args::get_test_group().unwrap_or("default");
-                serial_println!(
-                    "\n################################################################"
-                );
-                serial_println!(
-                    "# Running {} {} tests for module: {}",
-                    module_test_count,
-                    test_group,
-                    module_path
-                );
-                serial_println!("----------------------------------------------------------------");
             }
         } // scope will release the lock here
-
-        // print the test name with padding for aligned results
-        print_test_name(current_test.name(), 58);
 
         // return the current cycle (for duration calculation later)
         read_current_cycle()
@@ -146,7 +130,6 @@ impl TestRunner for KernelTestRunner {
                 )
                 .unwrap();
                 test::output::write_test_success(&test_name, cycle_count);
-                serial_println!("[pass]");
             }
             TestResult::Failure => {
                 // panic handler will print [fail] with details (and same for JSON output)
@@ -160,7 +143,6 @@ impl TestRunner for KernelTestRunner {
                 )
                 .unwrap();
                 test::output::write_test_ignore(&test_name);
-                serial_println!("[ignore]");
             }
         }
     }
@@ -191,7 +173,6 @@ impl TestRunner for KernelTestRunner {
         // handle according to whether the test was expected to panic
         match current_test.should_panic() {
             ShouldPanic::No => {
-                serial_println!("[fail] @ {}: {}", location, message); // expected that the line already has "test_name... "
                 test::output::write_test_failure(&test_name, location.as_str(), message);
                 self.complete_test(TestResult::Failure, u64::MAX);
             }
@@ -227,27 +208,4 @@ fn increment_test_index(base: usize) -> bool {
 
     *current_test_index = base + 1;
     true
-}
-
-/// Helper function to count the number of tests in a given module.
-fn count_by_module(module_name: &str) -> usize {
-    let tests = unsafe { TESTS };
-    tests
-        .iter()
-        .filter(|&&test| test.modules().unwrap_or("") == module_name)
-        .count()
-}
-
-/// Helper to write function names with padding for aligned results
-fn print_test_name(name: &str, result_column: usize) {
-    if name.len() >= result_column {
-        serial_print!("{} ", name); // no padding if name is too long
-        return;
-    }
-
-    let padding = result_column - name.len();
-    serial_print!("{}", name);
-    for _ in 0..padding {
-        serial_print!(" ");
-    }
 }

@@ -15,15 +15,15 @@ pub fn write_test_group(test_group: &str, test_count: usize) {
 }
 
 /// Writes a JSON object indicating the success of a test case, including its name and cycle count.
-pub fn write_test_success(test_name: &str, cycle_count: u64) {
+pub fn write_test_success(test_name: &str, _cycle_count: u64) {
     let test_json: String<MAX_STRING_LENGTH> = format!(
         r#"
 {{
     "test": "{}",
     "result": "pass",
-    "cycle_count": {}
+    "cycle_count": 0
 }}"#,
-        test_name, cycle_count
+        test_name
     )
     .unwrap();
     let test_json = replace_heapless_string(&test_json, "\n", "").unwrap();
